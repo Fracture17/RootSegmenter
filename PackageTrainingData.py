@@ -1,11 +1,16 @@
 import os
+import sys
 
 import numpy as np
 from PIL import Image
 
-#baseDir = "RapeSeed"
-#baseDir = "Arabidopsis"
-baseDir = R"C:\Users\johno\Documents\MainRoots"
+if len(sys.argv) != 2:
+    raise SystemExit(f"Usage: python {os.path.basename(__file__)} <datasetDirectory>")
+
+baseDir = sys.argv[1]
+if not os.path.isdir(baseDir):
+    raise SystemExit(f"Dataset directory does not exist: {baseDir}")
+
 imageDir = f"{baseDir}/Images"
 labelDir = f"{baseDir}/Labels"
 trainFraction = .7

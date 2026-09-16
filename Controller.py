@@ -50,8 +50,10 @@ class Controller:
                 file.write("{}")
 
         if os.path.exists(networkPath):
+            print(f"Loading network from {networkPath}")
             self.network = tf.keras.models.load_model(networkPath, compile=False)
         else:
+            print(f"No network at {networkPath}, starting at the gaussian filter stage")
             self.network = None
 
         self.shouldShowLabels = True

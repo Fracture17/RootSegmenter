@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <thread>
 #include <cmath>
+#include <array>
+#include <cstdio>
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -14,18 +16,20 @@ static constexpr std::array<int, 8> INDEX_2_R = {{0, -1, -1, -1, 0, 1, 1, 1}};
 static constexpr std::array<int, 8> INDEX_2_C = {{1, 1, 0, -1, -1, -1, 0, 1}};
 static u8* BRIGHTNESSES;
 static u32 WIDTH;
+static u32 HEIGHT;
 
 class Crawler {
 public:
     int r, c;
     double angle;
     bool canMoveRight, canMoveLeft;
+    bool dead;
     u32 totalBrightness;
     std::vector<int> historyR;
     std::vector<int> historyC;
 
     Crawler(u32 r, u32 c, double angle) :
-        r(r), c(c), angle(angle), canMoveRight(true), canMoveLeft(true), totalBrightness(0) {}
+        r(r), c(c), angle(angle), canMoveRight(true), canMoveLeft(true), dead(false), totalBrightness(0) {}
 
     void moveForward() {
         move(0);
@@ -58,8 +62,19 @@ private:
         int dR = INDEX_2_R[angleIndex];
         int dC = INDEX_2_C[angleIndex];
 
-        r += dR;
-        c += dC;
+        int newR = r + dR;
+        int newC = c + dC;
+
+        //A crawler that steps off the image has no brightness to read.  Mark it dead
+        //and let the caller drop it.  Without this the index below goes outside the
+        //brightness buffer, and a negative position wraps to an enormous u32.
+        if(newR < 0 || newR >= (int) HEIGHT || newC < 0 || newC >= (int) WIDTH) {
+            dead = true;
+            return;
+        }
+
+        r = newR;
+        c = newC;
         historyR.push_back(r);
         historyC.push_back(c);
 
@@ -87,20 +102,10 @@ private:
 
 
 int search(u32 startPos, u32 endPos, u32 height, u32 width, std::vector<Crawler>& slowCrawlers, std::vector<Crawler>& fastCrawlers, u8* blocked) {
-    for(u32 r = 0; r < height; r++) {
-        for(u32 c = 0; c < width; c++) {
-            u32 p = r * width + c;
-            if(blocked[p]) {
-                printf("Blocked: R: %d, C: %d\n", r, c); fflush(stdout);
-            }
-        }
-    }
-
     int startR = startPos / width;
     int startC = startPos % width;
     int endR = endPos / width;
     int endC = endPos % width;
-    printf("R: %d, C: %d\n", startR, startC); fflush(stdout);
 
     for(u32 i = 0; i < 8; i++) {
         slowCrawlers.emplace_back(startR, startC, PI * (i * .25));
@@ -108,10 +113,10 @@ int search(u32 startPos, u32 endPos, u32 height, u32 width, std::vector<Crawler>
     }
 
     std::vector<u32> earlyHistory(5);
+    std::vector<Crawler> children;
 
     u32 minDistance = std::max(std::abs(startR - endR), std::abs(startC - endC));
     u32 allowedDistance = minDistance * 1.5;
-    printf("Distance: %d, %d\n", minDistance, allowedDistance); fflush(stdout);
     for(u32 i = 0; i < allowedDistance; i++) {
         if(slowCrawlers.size() > 5000) {
             slowCrawlers.clear();
@@ -123,72 +128,75 @@ int search(u32 startPos, u32 endPos, u32 height, u32 width, std::vector<Crawler>
             break;
         }
 
+        //Children are collected separately and appended afterwards.  Pushing onto the
+        //same vector while holding a reference into it is undefined behaviour as soon
+        //as the vector reallocates.
         u32 oldLength = slowCrawlers.size();
+        children.clear();
         for(u32 j = 0; j < oldLength; j++) {
             auto& c = slowCrawlers[j];
 
             if(c.canMoveRight) {
-                slowCrawlers.push_back(c);
-                slowCrawlers.back().moveRight();
+                children.push_back(c);
+                children.back().moveRight();
             }
 
             if(c.canMoveLeft) {
-                slowCrawlers.push_back(c);
-                slowCrawlers.back().moveLeft();
+                children.push_back(c);
+                children.back().moveLeft();
             }
 
             c.moveForward();
         }
-
-        printf("Hey\n"); fflush(stdout);
+        slowCrawlers.insert(slowCrawlers.end(), children.begin(), children.end());
 
         oldLength = fastCrawlers.size();
+        children.clear();
         for(u32 j = 0; j < oldLength; j++) {
             auto& c = fastCrawlers[j];
 
-            fastCrawlers.push_back(c);
-            fastCrawlers.back().moveRight();
+            children.push_back(c);
+            children.back().moveRight();
 
-            fastCrawlers.push_back(c);
-            fastCrawlers.back().moveLeft();
+            children.push_back(c);
+            children.back().moveLeft();
 
             c.moveForward();
         }
-
-        printf("Hey2\n"); fflush(stdout);
+        fastCrawlers.insert(fastCrawlers.end(), children.begin(), children.end());
 
         for(u32 j = 0; j < slowCrawlers.size(); j++) {
             auto& c = slowCrawlers[j];
-            if(c.r == endR && c.c == endC) {
-                printf("Slow %d\n", i); fflush(stdout);
+            if(!c.dead && c.r == endR && c.c == endC) {
                 return j;
             }
         }
 
         for(u32 j = 0; j < fastCrawlers.size(); j++) {
             auto& c = fastCrawlers[j];
-            if(c.r == endR && c.c == endC) {
-                printf("Fast %d\n", i); fflush(stdout);
+            if(!c.dead && c.r == endR && c.c == endC) {
                 return j;
             }
         }
 
-        printf("Crawl: %lld, %lld\n", slowCrawlers.size(), slowCrawlers.capacity()); fflush(stdout);
-        printf("Crawl: %lld, %lld\n", fastCrawlers.size(), fastCrawlers.capacity()); fflush(stdout);
-
-        auto blockedCheckFunc = [width, blocked](const Crawler& c) {
+        //Drops crawlers that left the image as well as blocked ones.  The bounds check
+        //has to come first, since a dead crawler's position is not a valid index.
+        auto shouldRemoveFunc = [width, height, blocked](const Crawler& c) {
+            if(c.dead) {
+                return true;
+            }
+            if(c.r < 0 || c.r >= (int) height || c.c < 0 || c.c >= (int) width) {
+                return true;
+            }
             u32 p = c.r * width + c.c;
-            return blocked[p];
+            return (bool) blocked[p];
         };
 
-        auto newEnd = std::remove_if(slowCrawlers.begin(), slowCrawlers.end(), blockedCheckFunc);
+        auto newEnd = std::remove_if(slowCrawlers.begin(), slowCrawlers.end(), shouldRemoveFunc);
         slowCrawlers.erase(newEnd, slowCrawlers.end());
 
-        newEnd = std::remove_if(fastCrawlers.begin(), fastCrawlers.end(), blockedCheckFunc);
+        newEnd = std::remove_if(fastCrawlers.begin(), fastCrawlers.end(), shouldRemoveFunc);
         fastCrawlers.erase(newEnd, fastCrawlers.end());
-
-        printf("Crawl: %lld, %lld\n", slowCrawlers.size(), slowCrawlers.capacity()); fflush(stdout);
-        printf("Crawl: %lld, %lld\n", fastCrawlers.size(), fastCrawlers.capacity()); fflush(stdout);
 
         /*if(restrictDistance) {
             u32 remainingDistance = allowedDistance - i;
@@ -203,8 +211,8 @@ int search(u32 startPos, u32 endPos, u32 height, u32 width, std::vector<Crawler>
             newEnd = std::remove_if(fastCrawlers.begin(), fastCrawlers.end(), distanceCheckFunc);
             fastCrawlers.erase(newEnd, fastCrawlers.end());
 
-            printf("Crawl: %lld, %lld\n", slowCrawlers.size(), slowCrawlers.capacity()); fflush(stdout);
-            printf("Crawl: %lld, %lld\n", fastCrawlers.size(), fastCrawlers.capacity()); fflush(stdout);
+            printf("Crawl: %zu, %zu\n", slowCrawlers.size(), slowCrawlers.capacity()); fflush(stdout);
+            printf("Crawl: %zu, %zu\n", fastCrawlers.size(), fastCrawlers.capacity()); fflush(stdout);
         }*/
 
         if(slowCrawlers.size() > 0 && slowCrawlers[0].historyR.size() > 5) {
@@ -221,17 +229,10 @@ int search(u32 startPos, u32 endPos, u32 height, u32 width, std::vector<Crawler>
         std::sort(slowCrawlers.begin(), slowCrawlers.end(), brightnessCompareFunc);
         u32 limit = std::min((int) (slowCrawlers.size() / 2), 500);
         slowCrawlers.erase(slowCrawlers.begin() + limit, slowCrawlers.end());
-        printf("Hey5\n"); fflush(stdout);
 
         std::sort(fastCrawlers.begin(), fastCrawlers.end(), brightnessCompareFunc);
-        printf("Hey5\n"); fflush(stdout);
         limit = std::min((int) (fastCrawlers.size() / 2), 500);
-        printf("Hey5\n"); fflush(stdout);
         fastCrawlers.erase(fastCrawlers.begin() + limit, fastCrawlers.end());
-        printf("Hey5\n"); fflush(stdout);
-
-        printf("Crawl: %lld, %lld\n", slowCrawlers.size(), slowCrawlers.capacity()); fflush(stdout);
-        printf("Crawl: %lld, %lld\n", fastCrawlers.size(), fastCrawlers.capacity()); fflush(stdout);
     }
 
     for(auto p: earlyHistory) {
@@ -245,6 +246,7 @@ int search(u32 startPos, u32 endPos, u32 height, u32 width, std::vector<Crawler>
 extern "C" void twoPointConnection(u32 startPos, u32 endPos, u8* brightnesses, u32 height, u32 width, u8* results, u8* blocked) {
     BRIGHTNESSES = brightnesses;
     WIDTH = width;
+    HEIGHT = height;
 
     const u32 MAX_CRAWLERS = 5000;
     std::vector<Crawler> slowCrawlers;
@@ -254,22 +256,32 @@ extern "C" void twoPointConnection(u32 startPos, u32 endPos, u8* brightnesses, u
 
     int result = search(startPos, endPos, height, width, slowCrawlers, fastCrawlers, blocked);
     for(int i = 0; i < 10 && result == -1; i++) {
-        printf("Again\n"); fflush(stdout);
         slowCrawlers.clear();
         fastCrawlers.clear();
         result = search(startPos, endPos, height, width, slowCrawlers, fastCrawlers, blocked);
     }
 
     if(result != -1) {
-        results[startPos] = true;
-
         int endR = endPos / width;
         int endC = endPos % width;
-        auto& bestCrawler = (slowCrawlers[result].r == endR && slowCrawlers[result].c == endC) ? slowCrawlers[result] : fastCrawlers[result];
 
-        for(u32 i = 0; i < bestCrawler.historyR.size(); i++) {
-            u32 p = bestCrawler.historyR[i] * width + bestCrawler.historyC[i];
-            results[p] = true;
+        //The index came from whichever vector found the endpoint first, so it is only
+        //valid for that one.  Checking the size matters because the two vectors are
+        //pruned independently and often have different lengths.
+        const Crawler* bestCrawler = nullptr;
+        if(result < (int) slowCrawlers.size() && slowCrawlers[result].r == endR && slowCrawlers[result].c == endC) {
+            bestCrawler = &slowCrawlers[result];
+        } else if(result < (int) fastCrawlers.size() && fastCrawlers[result].r == endR && fastCrawlers[result].c == endC) {
+            bestCrawler = &fastCrawlers[result];
+        }
+
+        if(bestCrawler != nullptr) {
+            results[startPos] = true;
+
+            for(u32 i = 0; i < bestCrawler->historyR.size(); i++) {
+                u32 p = bestCrawler->historyR[i] * width + bestCrawler->historyC[i];
+                results[p] = true;
+            }
         }
     }
 }

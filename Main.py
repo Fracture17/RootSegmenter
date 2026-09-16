@@ -85,7 +85,9 @@ if __name__ == "__main__":
 
     # image = image.resize((image.width * 2, image.height * 2), Image.BICUBIC)
 
-    networkPath = f"{baseDir}/Network"
+    #Lowercase to match the directory names on disk.  Windows matched either way,
+    #but Linux is case sensitive and would silently skip the network.
+    networkPath = f"{baseDir}/network"
     textureDir = f"{baseDir}/TextureMatching"
     settingsPath = f"{baseDir}/Settings.ini"
 

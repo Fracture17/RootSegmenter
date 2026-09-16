@@ -92,12 +92,10 @@ ENV/
 ### VirtualEnv template
 # Virtualenv
 # http://iamzed.com/2009/05/07/a-primer-on-virtualenv/
-[Bb]in
-[Ii]nclude
-[Ll]ib
-[Ll]ib64
-[Ll]ocal
-[Ss]cripts
+# The bare bin/include/lib/Scripts patterns this template normally uses assume the
+# virtualenv lives in the project root.  This repository has core.ignoreCase set, so
+# they also matched C++/lib and SCRIPTS and silently excluded them.  The venv
+# directories are ignored by name below instead.
 pyvenv.cfg
 .venv
 pip-selfcheck.json
@@ -192,6 +190,9 @@ test*
 
 # PyCharm project settings
 .idea/
+
+# Linux virtual environment, alongside the Windows .venv
+.venv-linux/
 
 # Trained SavedModels.  The weights file alone is 155 MB, past GitHub's limit.
 /network*/

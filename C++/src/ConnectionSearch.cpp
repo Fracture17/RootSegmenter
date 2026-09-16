@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <thread>
 #include <cmath>
+#include <cstdio>
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -289,9 +290,7 @@ extern "C" void connectionSearch(u8* brightnesses, u8* mask, u32 height, u32 wid
     crawlers.reserve(MAX_CRAWLERS * 3);
 
     for(u32 i = 0; i < numEndpoints; i++) {
-        printf("I %d\n", i); fflush(stdout);
         u32 pos = endpoints[i];
-        printf("P %d\n", pos); fflush(stdout);
         _connectionSearch(pos, targetAngles[i], brightnessThresholds[i], searchLimit, brightnesses, mask, height, width, crawlers);
         crawlers.clear();
     }

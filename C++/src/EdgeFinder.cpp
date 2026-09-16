@@ -1,6 +1,7 @@
 #include <vector>
 #include <algorithm>
 #include <thread>
+#include <cstdio>
 
 
 typedef unsigned char u8;
@@ -137,7 +138,6 @@ extern "C" void checkForEdgesParallel(u8* brightnesses, u8* edgeHit, u32* target
 
 extern "C" void checkForEdges(u8* brightnesses, u8* edgeHit, u32* targets, u32 numTargets, u32 maxDistance, double upperThreshold, double lowerThreshold, double hardEdgeThreshold, u32 height, u32 width) {
     u32 cores = std::thread::hardware_concurrency();
-    printf("CORES: %d\n", cores); fflush(stdout);
     if(cores == 0) {
         cores = 6;
     }
