@@ -41,10 +41,11 @@ def pairImages2Labels(imageFile, labelFile, scale=1.0):
 
     return np.array(images), np.array(labels)
 
-#CNNs are not scale invariant, so inference must use the same scale as training.
-#The distributed network was trained at .5, which makes its input 800x832 for the
-#1664x1600 main dataset.  Controller.runInitial currently feeds full resolution images.
-SCALE = .5
+#CNNs are not scale invariant, so training must use the same scale as inference.
+#Controller.runInitial feeds full resolution images, so this must stay at 1.
+#Downsampling here trains the filters at the wrong scale and the network will not
+#transfer back to the GUI.
+SCALE = 1.0
 
 trainData, trainLabels = pairImages2Labels(imageFile, trainLabelFile, scale=SCALE)
 valData, valLabels = pairImages2Labels(imageFile, valLabelFile, scale=SCALE)
