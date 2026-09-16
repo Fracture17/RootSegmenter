@@ -50,28 +50,27 @@ if __name__ == "__main__":
 
     sys.setrecursionlimit(10000)
 
-    #baseDir = sys.argv[1]
+    if len(sys.argv) != 2:
+        raise SystemExit(f"Usage: python {os.path.basename(__file__)} <datasetDirectory>")
 
-    #baseDir = R"C:\Users\johno\Documents\Arabidopsis"
-    baseDir = R"C:\Users\johno\Documents\MainRoots"
-    #baseDir = R"C:\Users\johno\Documents\Rapeseed"
+    baseDir = sys.argv[1]
+    if not os.path.isdir(baseDir):
+        raise SystemExit(f"Dataset directory does not exist: {baseDir}")
 
-    #baseDir = "Arabidopsis"
-    assert os.path.exists(baseDir)
     initFiles(baseDir)
 
     app = QtWidgets.QApplication()
 
-    #baseDir = "Arabidopsis"
-    #baseDir = "RapeSeed"
-    #baseDir = "Roots"
-
     imageDirPath = f"{baseDir}/Images"
-    assert os.path.exists(imageDirPath)
+    if not os.path.isdir(imageDirPath):
+        raise SystemExit(f"Image directory does not exist: {imageDirPath}")
 
     labelDirPath = f"{baseDir}/Labels"
 
-    imageName, baseImageName = getNextRoot(imageDirPath, labelDirPath)
+    nextRoot = getNextRoot(imageDirPath, labelDirPath)
+    if nextRoot is None:
+        raise SystemExit(f"Every image in {imageDirPath} already has a label")
+    imageName, baseImageName = nextRoot
 
     #imagePath = "Roots/RootImages/37_3-9.png"
     #imagePath = R"RapeSeed/RootImages/C_osr_0129.jpg"
