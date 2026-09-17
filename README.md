@@ -1,8 +1,10 @@
 # RootSegmenter
 
-A semi-automated root phenotyping tool. It produces labels at a Dice coefficient of roughly .93 with a human labeler, and roughly .98 once its neural network has been trained on a dozen images. The two best existing semi-automated tools score between .45 and .74 on the same datasets.
+A human-in-the-loop annotation tool for image segmentation, built around active learning. A labeler corrects the program's output, the corrections train a neural network, and the network becomes the starting point for the next image. Twelve labeled images were enough to cut labeling time by more than half and raise label quality from roughly .93 Dice to roughly .98. The two best existing tools in the field score between .45 and .74 on the same datasets.
 
-Root phenotyping is the measurement of a root's physical characteristics. It is a bottleneck in agricultural science, because the purpose of root phenotyping is to test the results of scientific experiments. If the labels are inaccurate, the results of the experiment will also be inaccurate. Therefore, the only useful phenotyping software is one that does not make significant mistakes.
+The underlying problem is the one every annotation pipeline has. Good labels are expensive because they require a human, and the human is the bottleneck. The usual response is to accept worse labels in order to get more of them. This program holds label quality fixed and attacks the human's time instead.
+
+The domain is root phenotyping, the measurement of a root's physical characteristics. It is a bottleneck in agricultural science, because the purpose of root phenotyping is to test the results of scientific experiments. If the labels are inaccurate, the results of the experiment will also be inaccurate. Therefore, the only useful phenotyping software is one that does not make significant mistakes. That constraint is what makes it a demanding test case, because there is no room to trade quality for throughput.
 
 Accuracy is a requirement rather than a preference, but treating it that way does not mean accepting whatever speed happens to result. The secondary goal is minimizing user time, which is anything in the labeling process that requires human attention. This includes the time it takes to produce the labels, the time it takes to verify them, and the time it takes to test and optimize the software on a particular dataset. The amount of computer time is not significant, because computers are significantly faster, cheaper, more scalable, and can work around the clock.
 
@@ -10,41 +12,53 @@ The program holds accuracy fixed and attacks user time from four directions. It 
 
 This was my MS Computer Science project at Cal Poly Pomona in 2024. The full write-up, including the literature survey and the evaluation methodology, is in [docs/paper.pdf](docs/paper.pdf).
 
-![The Gaussian threshold stage](docs/images/pipeline-gaussian-threshold.png)
+## Why the ground truth had to be rebuilt
+
+![Existing labels from the public rapeseed dataset](docs/images/existing-labels-rapeseed.jpg)
+
+These are the labels that ship with the public rapeseed dataset, produced by domain experts using the existing tooling. Note the unlabeled offshoots and how the labels lose track of the roots when they curve. The Arabidopsis set has the same problem in a milder form.
+
+Labels like these cannot serve as a ground truth, so new ones had to be produced for all three datasets before anything could be measured. That is also the argument for the project in one image. If the best available tools produce this, the tools are the problem.
+
+Adapted from the [GigaDB supporting data](https://doi.org/10.5524/100651) for RootNav 2.0.
 
 ## Results
 
-All three tools below are semi-automated, so a human labeler drives each one and the comparison is direct. The last column is the exception, and shows this project's network running with no human input at all.
+Every column is driven by a human labeler except the two marked Auto, which show this project's network running with no human input at all. Neural Net 6 and Neural Net 12 mean the network was trained on that many labeled images.
 
 Average Dice coefficient, where higher is better:
 
-| Dataset | RootNav | saRIA | RootSegmenter | With CNN, 12 samples | CNN alone, no human |
-|---|---|---|---|---|---|
-| Main | N/A | .6584 | .9313 | .9769 | .9702 |
-| Arabidopsis | .6619 | .7350 | .9420 | .9893 | .9829 |
-| Rapeseed | .6279 | .4539 | .9272 | .9826 | .9780 |
+| Dataset | RootNav | saRIA | Project | Neural Net 6 | Neural Net 12 | Neural Net 6 Auto | Neural Net 12 Auto |
+|---|---|---|---|---|---|---|---|
+| Main | N/A | .6584 | .9313 | N/A | .9769 | N/A | .9702 |
+| Arabidopsis | .6619 | .7350 | .9420 | .9721 | .9893 | .9548 | .9829 |
+| Rapeseed | .6279 | .4539 | .9272 | .9529 | .9826 | .9407 | .9780 |
 
 Average seconds to label one image, where lower is better:
 
-| Dataset | RootNav | saRIA | RootSegmenter | With CNN, 12 samples |
-|---|---|---|---|---|
-| Main | N/A | 199 | 865 | 403 |
-| Arabidopsis | 379 | 164 | 245 | 108 |
-| Rapeseed | 487 | 106 | 510 | 145 |
+| Dataset | RootNav | saRIA | Project | Neural Net 6 | Neural Net 12 |
+|---|---|---|---|---|---|
+| Main | N/A | 199 | 865 | N/A | 403 |
+| Arabidopsis | 379 | 164 | 245 | 148 | 108 |
+| Rapeseed | 487 | 106 | 510 | 197 | 145 |
 
 RootNav did not receive a score on the main dataset. It was so overwhelmed by the dataset's complexity that it would have likely taken at least an hour to label a single image, and would still have had poor accuracy.
 
-Three results are worth drawing out. The first is that the accuracy gap is large. The difference between .93 and the .45 to .74 range is the difference between labels that can be published and labels that have to be discarded. The existing ground truths for both public datasets had to be thrown out for that exact reason.
+Four results are worth drawing out. The first is that the accuracy gap is large. The difference between .93 and the .45 to .74 range is the difference between labels that can be published and labels that have to be discarded. The existing ground truths for both public datasets had to be thrown out for that exact reason.
 
 The second is that the network paid for itself after twelve labeled images. It cut labeling time by a factor of two to three and a half, and raised accuracy at the same time. It was trained for two hours on a single V100.
 
 The third is that the network on its own, with no human involvement, beat every existing semi-automated tool by roughly .25 Dice.
 
+The fourth is that label quality rises monotonically with the number of labeled images, from .9420 to .9721 to .9893 on Arabidopsis and from .9272 to .9529 to .9826 on rapeseed. That is the active learning loop working as intended. Every image the labeler corrects makes the next one cheaper, and the curve has not flattened by twelve.
+
 Consistency is also worth noting. RootSegmenter scores within .015 Dice across three visually very different datasets, while saRIA ranges from .4539 to .7350. A software is adaptable if it can consistently perform well on datasets it was not trained or optimized on. If the software is not consistent, taking the time to use it on a new dataset is inherently risky.
 
 ### Caveats
 
-There were no quality ground truths for any of the datasets, so new ones had to be produced. This was done using this program with its most trained network, spending much more time than normal manually ensuring everything was correct. It is likely the neural networks obtained a higher score than they should have, because a significant portion of the network's predictions were kept in the ground truths. The project's non-network scores were also likely hurt by the same process, which makes the results more balanced. Neither effect is large enough to explain the size of the accuracy difference, but the numbers are not free of bias.
+There were no quality ground truths for any of the datasets, so new ones had to be produced. This was done using this program with its most trained network, spending much more time than normal manually ensuring everything was correct. A significant portion of the network's predictions were kept in the ground truths, so it is likely the neural networks obtained a higher score than they should have.
+
+That bias touches exactly one comparison, which is the internal gap between the .93 column and the .98 columns. It cannot account for the gap against saRIA and RootNav, because those were scored against the same ground truth without contributing anything to it. It also runs against the project's own non-network scores, which were hurt by the same process, so even the internal comparison is more balanced than it first appears.
 
 RootNav also has lower scores than it probably should. Its labels are just slightly off, meaning it has the spirit of the roots but not the exact values. It did still make some significant errors, such as missing some offshoots completely.
 
@@ -63,6 +77,8 @@ These issues sound cosmetic, but they are not. They drag the user down and cause
 ## How it works
 
 The program works in nine stages. The user steps through them, adjusting settings and watching the labels update, and can return to any previous stage using undo.
+
+![The Gaussian threshold stage](docs/images/pipeline-gaussian-threshold.png)
 
 | # | Stage | Implementation |
 |---|---|---|
@@ -216,7 +232,7 @@ python Main.py <datasetDirectory>
 
 On startup the program looks inside the image and label directories provided by the user. It sorts the list of image names and loads the first one that does not have a corresponding label, so running it repeatedly walks through the dataset.
 
-There are a few rough edges to be aware of. The C++ kernels must be compiled before the first run. `compileCPP()` in [Main.py](Main.py) does this by shelling out to `c++` directly, and is commented out at the entry point. All shared library paths are relative to the working directory, so the program must be launched from the repository root. The base directory is still hardcoded to a Windows path in [PackageTrainingData.py](PackageTrainingData.py), which is run by hand between labeling and training. Finally, the trained network is not distributed here, because the SavedModel is 159 MB and past GitHub's file size limit. Without it the program starts at the Gaussian filter stage and runs as a purely classical pipeline, which is the .93 Dice configuration.
+There are a few rough edges to be aware of. The C++ kernels are built on startup by `compileCPP()` in [Main.py](Main.py), which shells out to `c++` and skips any library that already exists, so the first run needs a compiler on the path. All shared library paths are relative to the working directory, so the program must be launched from the repository root. [PackageTrainingData.py](PackageTrainingData.py) is run by hand between labeling and training. Finally, the trained network is not distributed in the repository, because the SavedModel is past GitHub's file size limit. Without it the program starts at the Gaussian filter stage and runs as a purely classical pipeline, which is the .93 Dice configuration.
 
 A dataset directory is expected to look like this:
 
@@ -266,4 +282,4 @@ The full evaluation, literature survey, and algorithm descriptions are in:
 
 > John Otters. *Development of High-Accuracy Root Phenotyping Software.* MS Computer Science project, California State Polytechnic University, Pomona, 2024. See [docs/paper.pdf](docs/paper.pdf).
 
-The program was compared against [RootNav 2.0](https://doi.org/10.1093/gigascience/giz123) by Yasrab et al. and [saRIA](https://doi.org/10.1038/s41598-019-55876-3) by Narisetti et al.
+The program was compared against RootNav and [saRIA](https://doi.org/10.1038/s41598-019-55876-3) by Narisetti et al. Both RootNav releases are covered in the paper: [RootNav](https://doi.org/10.1104/pp.113.221531) by Pound et al. and [RootNav 2.0](https://doi.org/10.1093/gigascience/giz123) by Yasrab et al.

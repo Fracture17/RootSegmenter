@@ -22,14 +22,33 @@ def getNextRoot(imageDirPath, labelDirPath):
             return imageName, baseImageName
 
 
-def compileCPP():
-    pass
-    os.system("c++ -shared -fPIC -Wall -Werror C++/src/GaussianThreshold.cpp -o C++/lib/GaussianThreshold.so -O3")
-    os.system("c++ -shared -fPIC -Wall -Werror C++/src/EdgeFinder.cpp -o C++/lib/EdgeFinder.so -O3")
-    os.system("c++ -shared -fPIC -Wall -Werror C++/src/ConnectionSearch.cpp -o C++/lib/ConnectionSearch.so -O3")
-    os.system("c++ -shared -fPIC -Wall -Werror C++/src/TwoPointConnection.cpp -o C++/lib/TwoPointConnection.so -O3")
-    os.system("c++ -shared -fPIC -Wall -Werror C++/src/GetClosestSkeleton.cpp -o C++/lib/GetClosestSkeleton.so -O3")
-    os.system("c++ -shared -fPIC -Wall -Werror C++/src/GetClosestPointsToSegment.cpp -o C++/lib/GetClosestPointsToSegment.so -O3")
+CPP_KERNELS = [
+    "GaussianThreshold",
+    "EdgeFinder",
+    "ConnectionSearch",
+    "TwoPointConnection",
+    "GetClosestSkeleton",
+    "GetClosestPointsToSegment",
+]
+
+
+def compileCPP(force=False):
+    """Builds any kernel whose shared library is missing, so the first run works.
+
+    Rebuilding every launch costs a few seconds and the sources rarely change, so
+    existing libraries are left alone.  Pass force=True after editing a kernel.
+    """
+    makeDirIfNotExists("C++/lib")
+
+    for name in CPP_KERNELS:
+        libPath = f"C++/lib/{name}.so"
+        if not force and os.path.exists(libPath):
+            continue
+
+        print(f"Compiling {name}")
+        command = f"c++ -shared -fPIC -Wall -Werror C++/src/{name}.cpp -o {libPath} -O3"
+        if os.system(command) != 0:
+            raise SystemExit(f"Failed to compile {name}. Command was:\n{command}")
 
 
 def initFiles(baseDir):
@@ -46,7 +65,7 @@ def makeDirIfNotExists(path):
 
 
 if __name__ == "__main__":
-    #compileCPP()
+    compileCPP()
 
     sys.setrecursionlimit(10000)
 
